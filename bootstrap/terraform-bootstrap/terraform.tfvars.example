@@ -1,9 +1,18 @@
 # Terraform Cloud Configuration
-tfc_organization  = "your-tfc-org-name"
-tfc_workspace_name = "azure-landing-zone"  # or use "*" for all workspaces
+tfc_organization = "mikevh"
+
+# List of workspaces to create credentials for
+# Each workspace will get 2 credentials (one for plan, one for apply)
+tfc_workspaces = ["landingzone-azure"]
+
+# For multiple workspaces:
+# tfc_workspaces = ["dev", "staging", "prod"]
+
+# For all workspaces (creates wildcard credentials):
+# tfc_workspaces = ["*"]
 
 # Optional: Use project-level credentials
-# tfc_project_name = "your-project-name"
+tfc_project_name = "Default Project"  # ⚠️ IMPORTANT! Include this if workspace is in a project!
 
 # Azure AD Application Name (optional)
 # app_name = "terraform-cloud-my-org"

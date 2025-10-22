@@ -29,10 +29,10 @@ variable "tfc_organization" {
   type        = string
 }
 
-variable "tfc_workspace_name" {
-  description = "Terraform Cloud workspace name (use 'project:*' for all workspaces in a project)"
-  type        = string
-  default     = "*"
+variable "tfc_workspaces" {
+  description = "List of Terraform Cloud workspace names to create credentials for"
+  type        = list(string)
+  default     = ["*"]
 }
 
 variable "tfc_project_name" {
@@ -61,21 +61,6 @@ variable "role_assignments" {
   ]
 }
 
-locals {
-  app_name = var.app_name != null ? var.app_name : "terraform-cloud-${var.tfc_organization}"
-  
-  # Determine subject based on workspace or project
-  subject = var.tfc_project_name != null ? (
-    "organization:${var.tfc_organization}:project:${var.tfc_project_name}:workspace:${var.tfc_workspace_name}:run_phase:*"
-  ) : (
-    var.tfc_workspace_name == "*" ? (
-      "organization:${var.tfc_organization}:workspace:*:run_phase:*"
-    ) : (
-      "organization:${var.tfc_organization}:workspace:${var.tfc_workspace_name}:run_phase:*"
-    )
-  )
-}
-
 # Create Azure AD Application
 resource "azuread_application" "tfc" {
   display_name = local.app_name
@@ -89,14 +74,16 @@ resource "azuread_service_principal" "tfc" {
   description                  = "Service Principal for Terraform Cloud"
 }
 
-# Create Federated Identity Credential
+# Create Federated Identity Credentials (one for plan, one for apply, for each workspace)
 resource "azuread_application_federated_identity_credential" "tfc" {
+  for_each = local.workspace_credentials
+
   application_id = azuread_application.tfc.id
-  display_name   = "terraform-cloud-federated-credential"
-  description    = "Federated credential for Terraform Cloud workload identity"
+  display_name   = each.value.display_name
+  description    = "Federated credential for TFC workspace: ${each.value.workspace} (${each.value.run_phase})"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://app.terraform.io"
-  subject        = local.subject
+  subject        = each.value.subject
 }
 
 # Assign roles to the service principal
@@ -135,6 +122,18 @@ output "terraform_cloud_variables" {
 }
 
 output "subject_claim" {
-  description = "The subject claim used for the federated credential"
-  value       = local.subject
+  description = "The subject claims used for the federated credentials"
+  value       = { for k, v in local.workspace_credentials : k => v.subject }
+}
+
+output "federated_credentials" {
+  description = "Map of all created federated credentials"
+  value = {
+    for k, v in local.workspace_credentials : k => {
+      workspace    = v.workspace
+      run_phase    = v.run_phase
+      subject      = v.subject
+      display_name = v.display_name
+    }
+  }
 }

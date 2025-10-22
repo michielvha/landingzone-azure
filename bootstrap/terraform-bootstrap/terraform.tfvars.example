@@ -1,0 +1,21 @@
+# Terraform Cloud Configuration
+tfc_organization  = "your-tfc-org-name"
+tfc_workspace_name = "azure-landing-zone"  # or use "*" for all workspaces
+
+# Optional: Use project-level credentials
+# tfc_project_name = "your-project-name"
+
+# Azure AD Application Name (optional)
+# app_name = "terraform-cloud-my-org"
+
+# Role Assignments (optional - defaults to Contributor on subscription)
+# role_assignments = [
+#   {
+#     role  = "Contributor"
+#     scope = null  # Uses subscription scope
+#   },
+#   {
+#     role  = "User Access Administrator"
+#     scope = "/subscriptions/your-subscription-id/resourceGroups/your-rg"
+#   }
+# ]

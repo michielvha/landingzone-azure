@@ -6,21 +6,21 @@ A complete Azure Landing Zone repository for Terraform Cloud with **OIDC Workloa
 
 ### Key Components
 
-1. **Cross-Platform Go Binary** (`setup-azure-workload-identity`)
-   - Works on Windows, Linux, macOS
-   - Interactive and config-file modes
-   - Idempotent (safe to run multiple times)
-   - Automatic cleanup of old credentials
+1. **Terraform Bootstrap Module**
+   - Creates Azure AD Application and Service Principal
+   - Configures Federated Identity Credentials
+   - Sets up role assignments
+   - Idempotent and declarative
 
-2. **Terraform Infrastructure**
+2. **Landing Zone Infrastructure**
    - Networking module with VNet, subnets, NSGs
-   - TFC backend configuration
+   - Terraform Cloud backend configuration
    - Azure provider with OIDC enabled
 
-3. **Comprehensive Documentation**
-   - Setup guides (README, QUICKSTART)
-   - Troubleshooting (FIXES, IDEMPOTENCY)
-   - Technical details (WHY_GO, PLAN_APPLY_CREDENTIALS)
+3. **Pure Terraform Approach**
+   - No custom scripts or binaries needed
+   - Uses Azure CLI for initial authentication only
+   - Everything else is Terraform
 
 ## Critical Discoveries
 
@@ -41,11 +41,8 @@ A complete Azure Landing Zone repository for Terraform Cloud with **OIDC Workloa
 **Root Cause**: Terraform Cloud automatically includes the project name in the OIDC subject claim when a workspace is in a project (including "Default Project").
 
 **Solution**: Always specify the project in your config:
-```yaml
-terraform_cloud:
-  organization: "mikevh"
-  project: "Default Project"  # REQUIRED if workspace is in a project!
-  workspace: "landingzone-azure"
+```hcl
+tfc_project_name = "Default Project"  # REQUIRED if workspace is in a project!
 ```
 
 ## Current Setup
@@ -83,11 +80,37 @@ The plan successfully:
 - ✅ Fetched Azure subscription and client config
 - ✅ Planned to create 14 networking resources
 
-## Next Steps
+## How to Use This Repository
 
-### To Deploy Infrastructure
+### Initial Bootstrap (One-Time Setup)
 
-```bash
+```powershell
+# 1. Login to Azure
+az login
+
+# 2. Run the Terraform bootstrap
+cd bootstrap
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your TFC org and workspace names
+
+terraform init
+terraform apply
+
+# 3. Copy outputs to Terraform Cloud workspace variables
+terraform output
+```
+
+### Deploy the Landing Zone
+
+```powershell
+# 1. Login to Terraform Cloud
+terraform login
+
+# 2. Initialize with TFC backend
+cd ..
+terraform init
+
+# 3. Deploy infrastructure
 terraform apply
 ```
 
@@ -101,19 +124,14 @@ This will create:
 ### To Add More Workspaces
 
 1. Create new workspaces in TFC (e.g., `staging`, `prod`)
-2. Update `config.yaml`:
-   ```yaml
-   terraform_cloud:
-     organization: "mikevh"
-     project: "Default Project"
-     workspaces:
-       - "landingzone-azure"
-       - "staging"
-       - "prod"
+2. Update `bootstrap/terraform.tfvars`:
+   ```hcl
+   tfc_workspaces = ["landingzone-azure", "staging", "prod"]
    ```
-3. Run the setup tool again:
-   ```bash
-   ./setup-azure-workload-identity --config config.yaml
+3. Re-run the bootstrap:
+   ```powershell
+   cd bootstrap
+   terraform apply
    ```
 
 This will create plan+apply credentials for all workspaces (2 credentials × 3 workspaces = 6 total).
@@ -131,25 +149,19 @@ Add more modules for:
 
 ```
 landingzone-azure/
-├── README.md
-├── main.tf                           # Root TFC backend + networking module
-├── variables.tf
-├── outputs.tf
+├── README.md                   # Quick start guide
+├── SETUP_GUIDE.md             # Detailed setup instructions
+├── COMPLETE.md                # This file - project summary
+├── main.tf                    # Root module with TFC backend
 ├── bootstrap/
-│   └── setup-azure-workload-identity/
-│       ├── main.go                   # Go binary source
-│       ├── main_test.go              # Unit tests
-│       ├── go.mod
-│       ├── config.yaml               # Your configuration
-│       ├── config.yaml.example       # Template
-│       ├── setup-azure-workload-identity.exe  # Windows binary
-│       ├── README.md                 # Usage guide
-│       ├── QUICKSTART.md             # Quick start guide
-│       ├── PLAN_APPLY_CREDENTIALS.md # Why 2 credentials needed
-│       └── ...other docs
+│   ├── main.tf                # Azure AD app & federated credentials
+│   ├── locals.tf              # Subject claim generation logic
+│   ├── terraform.tfvars       # Your TFC configuration
+│   ├── terraform.tfvars.example
+│   └── README.md
 └── modules/
     └── networking/
-        ├── main.tf                   # VNet, subnets, NSGs
+        ├── main.tf            # VNet, subnets, NSGs
         ├── variables.tf
         └── outputs.tf
 ```
@@ -158,9 +170,9 @@ landingzone-azure/
 
 1. **Always check TFC workspace project** - It affects OIDC subject claims
 2. **Azure federated creds are very specific** - No wildcards in run_phase
-3. **Use temp files for JSON on Windows** - Avoids PowerShell escaping issues
-4. **Go binaries are ideal for DevOps tools** - Cross-platform, self-contained
-5. **Idempotency is critical** - Tools should be safe to run multiple times
+3. **Terraform for everything** - No need for custom scripts or binaries
+4. **Azure CLI for bootstrap only** - User context is sufficient for initial setup
+5. **Idempotency is critical** - Terraform handles this naturally
 6. **Document edge cases** - Save others from the same debugging journey
 
 ## Resources

@@ -1,104 +1,167 @@
-# Bootstrap - Workload Identity Federation Setup
+# Terraform Bootstrap for Azure Workload Identity
 
-This directory contains multiple tools to set up workload identity federation between Terraform Cloud and Azure.
+This Terraform module creates the Azure AD application, service principal, and federated identity credentials needed for Terraform Cloud workload identity federation.
 
-## What Gets Created
+## Features
 
-1. **Azure AD Application**: Represents Terraform Cloud in Azure AD
-2. **Service Principal**: Identity that Terraform Cloud will use
-3. **Federated Credential**: Trust relationship using OIDC
-4. **Role Assignments**: Permissions for the service principal
+✅ Creates **2 credentials per workspace** (plan + apply) - Azure does NOT support `run_phase:*` wildcards  
+✅ Supports multiple workspaces in a single run  
+✅ Project-aware subject claims  
+✅ Declarative infrastructure-as-code approach  
+✅ Idempotent - safe to run multiple times
 
 ## Prerequisites
 
-- Azure CLI installed and authenticated
-- Permissions to create App Registrations and assign roles
-- Your Terraform Cloud organization name
-- Your Terraform Cloud workspace name (or use wildcards)
+- Azure CLI installed and authenticated (`az login`)
+- Terraform >= 1.0
+- Appropriate Azure AD permissions to create applications and service principals
+- Terraform Cloud organization and workspace(s) created
 
-## Usage
+## Quick Start
 
-### Option 1: Using Go Binary (Recommended - Cross-Platform) ⭐
+1. **Authenticate with Azure CLI:**
 
-**Works on Windows, Linux, and macOS with a single binary!**
+   ```powershell
+   az login
+   ```
 
-```bash
-cd setup-azure-workload-identity
+   The bootstrap will use your user credentials to create the initial Azure resources.
 
-# Interactive mode (easiest)
-./setup-azure-workload-identity --interactive
+2. **Copy the example configuration:**
 
-# Or use a config file
-cp config.yaml.example config.yaml
-# Edit config.yaml with your values
-./setup-azure-workload-identity --config config.yaml
+   ```powershell
+   cp terraform.tfvars.example terraform.tfvars
+   ```
+
+3. **Edit terraform.tfvars:**
+
+   ```hcl
+   tfc_organization = "your-org"
+   tfc_workspaces   = ["landingzone-azure"]
+   tfc_project_name = "Default Project"  # Include if workspace is in a project
+   ```
+
+4. **Initialize and apply:**
+
+   ```powershell
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+5. **Configure Terraform Cloud:**
+   
+   Add these environment variables to each TFC workspace:
+   ```
+   TFC_AZURE_PROVIDER_AUTH = true
+   TFC_AZURE_RUN_CLIENT_ID = <client_id from output>
+   ARM_SUBSCRIPTION_ID     = <subscription_id from output>
+   ARM_TENANT_ID           = <tenant_id from output>
+   ```
+
+## How It Works
+
+For each workspace specified, this module creates **TWO** federated credentials:
+- One with `run_phase:plan` for terraform plan operations
+- One with `run_phase:apply` for terraform apply operations
+
+This is required because Azure federated credentials do NOT support wildcards in the `run_phase` field.
+
+### Example Output
+
+For `tfc_workspaces = ["dev", "staging"]`, this creates:
+- `terraform-cloud-federated-credential-plan-0` (dev, plan)
+- `terraform-cloud-federated-credential-apply-0` (dev, apply)
+- `terraform-cloud-federated-credential-plan-1` (staging, plan)
+- `terraform-cloud-federated-credential-apply-1` (staging, apply)
+
+## Configuration Options
+
+### Multiple Workspaces
+
+```hcl
+tfc_workspaces = ["dev", "staging", "prod"]
 ```
 
-See [setup-azure-workload-identity/README.md](./setup-azure-workload-identity/README.md) for detailed usage.
+Creates credentials for all specified workspaces.
 
-### Option 2: Using Bash Script (Linux/macOS/WSL)
+### Wildcard Workspace
 
-```bash
-chmod +x setup-workload-identity.sh
-./setup-workload-identity.sh
+```hcl
+tfc_workspaces = ["*"]
 ```
 
-### Option 3: Using PowerShell Script (Windows)
+Allows any workspace in the organization to authenticate (still creates separate plan/apply credentials).
 
-```powershell
-.\setup-workload-identity.ps1
+### Custom Role Assignments
+
+```hcl
+role_assignments = [
+  {
+    role  = "Contributor"
+    scope = null  # Uses subscription scope
+  },
+  {
+    role  = "Reader"
+    scope = "/subscriptions/xxx/resourceGroups/my-rg"
+  }
+]
 ```
 
-### Option 4: Using Terraform Bootstrap
+### Custom Application Name
 
-```bash
-cd terraform-bootstrap
-terraform init
-terraform apply
+```hcl
+app_name = "my-custom-app-name"
 ```
+
+Defaults to `terraform-cloud-{organization}` if not specified.
 
 ## Outputs
 
-After running the setup, you'll receive:
-
-```
-ARM_CLIENT_ID=<application-id>
-ARM_SUBSCRIPTION_ID=<subscription-id>
-ARM_TENANT_ID=<tenant-id>
-```
-
-## Configuring Terraform Cloud
-
-1. Go to your workspace in Terraform Cloud
-2. Navigate to Variables
-3. Add these as **Environment Variables**:
-   - `TFC_AZURE_PROVIDER_AUTH` = `true` (enables dynamic credentials)
-   - `TFC_AZURE_RUN_CLIENT_ID` = `<application-id from above>`
-   - `ARM_SUBSCRIPTION_ID` = `<subscription-id>`
-   - `ARM_TENANT_ID` = `<tenant-id>`
-
-## Verification
-
-Test the setup with a simple Terraform configuration:
+After successful apply, you'll see:
 
 ```hcl
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-  use_oidc = true
-}
-
-data "azurerm_subscription" "current" {}
-
-output "subscription_id" {
-  value = data.azurerm_subscription.current.subscription_id
+client_id                = "db67dee7-..."
+subscription_id          = "a85f8d7e-..."
+tenant_id               = "a05a1c32-..."
+terraform_cloud_variables = {
+  TFC_AZURE_PROVIDER_AUTH = "true"
+  TFC_AZURE_RUN_CLIENT_ID = "db67dee7-..."
+  ARM_SUBSCRIPTION_ID     = "a85f8d7e-..."
+  ARM_TENANT_ID          = "a05a1c32-..."
 }
 ```
+
+## Subject Claim Format
+
+The subject claims follow this format:
+
+**Without project:**
+```
+organization:{org}:workspace:{workspace}:run_phase:{phase}
+```
+
+**With project:**
+```
+organization:{org}:project:{project}:workspace:{workspace}:run_phase:{phase}
+```
+
+## Troubleshooting
+
+### Error: Insufficient privileges to complete the operation
+
+**Cause**: Your Azure user doesn't have permission to create app registrations.
+
+**Solution**: Ask your Azure AD admin to grant you "Application Developer" role or higher.
+
+### Error: Subject claim mismatch in Terraform Cloud
+
+**Cause**: The `tfc_project_name` doesn't match your actual workspace project.
+
+**Solution**: Check your workspace in Terraform Cloud and update `terraform.tfvars` accordingly.
+
+### Error: Multiple federated credentials with same subject
+
+**Cause**: Re-running bootstrap after changing workspace configuration.
+
+**Solution**: The module is idempotent. Run `terraform apply` again to update credentials.

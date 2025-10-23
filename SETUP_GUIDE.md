@@ -1,6 +1,6 @@
-# Azure Landing Zone with Terraform Cloud - Complete Setup Guide
+# Azure Landing Zone with Terraform Cloud - Setup Guide
 
-This guide walks you through setting up Azure workload identity federation with Terraform Cloud from scratch.
+This guide walks you through setting up Azure workload identity federation with Terraform Cloud using only Terraform and Azure CLI.
 
 ## Overview
 
@@ -10,12 +10,12 @@ This guide walks you through setting up Azure workload identity federation with 
 
 - [ ] Azure subscription with Owner or User Access Administrator permissions
 - [ ] Azure CLI installed (`az --version` to verify)
+- [ ] Terraform installed locally (for bootstrap)
 - [ ] Terraform Cloud account (free tier works)
-- [ ] Git installed
 
 ## Step-by-Step Setup
 
-### 1. Prepare Azure CLI
+### 1. Login to Azure
 
 ```powershell
 # Login to Azure
@@ -34,58 +34,56 @@ az account set --subscription "YOUR_SUBSCRIPTION_ID"
 2. Create a new organization (or use existing)
 3. Create a new workspace:
    - Choose "CLI-driven workflow"
-   - Name it `azure-landing-zone` (or your preferred name)
+   - Name it `landingzone-azure` (or your preferred name)
    - Click "Create workspace"
 
-### 3. Set Up Workload Identity Federation
+### 3. Bootstrap with Terraform
 
-Choose one of these methods:
-
-#### Option A: PowerShell Script (Recommended for Windows)
+Navigate to the bootstrap directory and configure:
 
 ```powershell
 cd bootstrap
-.\setup-workload-identity.ps1
-```
 
-When prompted, enter:
-- **TFC Organization**: Your Terraform Cloud org name
-- **TFC Workspace**: `azure-landing-zone` (or your workspace name)
-- **Subscription ID**: Press Enter to use current subscription
-- **App Name**: Press Enter to use default
-
-#### Option B: Bash Script (For WSL/Linux/macOS)
-
-```bash
-cd bootstrap
-chmod +x setup-workload-identity.sh
-./setup-workload-identity.sh
-```
-
-#### Option C: Terraform Bootstrap (Most Automated)
-
-```powershell
-cd bootstrap/terraform-bootstrap
-
-# Copy and edit the tfvars file
+# Copy the example configuration
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
 
-# Run Terraform
+# Edit terraform.tfvars with your details
+notepad terraform.tfvars
+```
+
+Edit the file:
+```hcl
+tfc_organization = "your-org-name"
+tfc_workspaces   = ["landingzone-azure"]
+tfc_project_name = "Default Project"  # Include if workspace is in a project
+```
+
+Run Terraform to create the Azure resources:
+
+```powershell
+# Initialize Terraform
 terraform init
+
+# Preview what will be created
 terraform plan
+
+# Apply the configuration
 terraform apply
 ```
 
+This creates:
+- Azure AD Application
+- Service Principal  
+- Federated Identity Credentials (separate for plan & apply phases)
+- Role Assignment (Contributor by default)
+
 ### 4. Configure Terraform Cloud Workspace
 
-After running the setup script, you'll get output like this:
+After the bootstrap completes, copy the output values to Terraform Cloud:
 
-```
-TFC_AZURE_PROVIDER_AUTH = true
-TFC_AZURE_RUN_CLIENT_ID = 12345678-1234-1234-1234-123456789abc
-ARM_SUBSCRIPTION_ID = 87654321-4321-4321-4321-abcdef123456
-ARM_TENANT_ID = abcdef12-3456-7890-abcd-ef1234567890
+```powershell
+# View the outputs
+terraform output
 ```
 
 Now configure your workspace:
@@ -97,33 +95,36 @@ Now configure your workspace:
    | Variable | Value | Sensitive |
    |----------|-------|-----------|
    | `TFC_AZURE_PROVIDER_AUTH` | `true` | No |
-   | `TFC_AZURE_RUN_CLIENT_ID` | `<your-client-id>` | No |
-   | `ARM_SUBSCRIPTION_ID` | `<your-subscription-id>` | No |
-   | `ARM_TENANT_ID` | `<your-tenant-id>` | No |
+   | `TFC_AZURE_RUN_CLIENT_ID` | `<client_id from output>` | No |
+   | `ARM_SUBSCRIPTION_ID` | `<subscription_id from output>` | No |
+   | `ARM_TENANT_ID` | `<tenant_id from output>` | No |
 
-### 5. Update Terraform Configuration
+### 5. Update Root Terraform Configuration
 
-Edit `main.tf` in the root directory:
+Edit `main.tf` in the repository root:
 
 ```hcl
 terraform {
   cloud {
-    organization = "YOUR_ORG_NAME"  # ← Change this
+    organization = "your-org-name"  # ← Change this
     
     workspaces {
-      name = "azure-landing-zone"    # ← Change this if needed
+      name = "landingzone-azure"    # ← Change this if needed
     }
   }
 }
 ```
 
-### 6. Initialize and Deploy
+### 6. Deploy the Landing Zone
 
 ```powershell
+# Return to repository root
+cd ..
+
 # Login to Terraform Cloud
 terraform login
 
-# Initialize Terraform (will migrate to TFC)
+# Initialize with TFC backend
 terraform init
 
 # Plan the deployment
@@ -147,8 +148,8 @@ After applying, check that:
 
 1. **Azure AD Application**: Represents Terraform Cloud
 2. **Service Principal**: The identity TFC uses
-3. **Federated Credential**: The OIDC trust configuration
-4. **Role Assignment**: Permissions (usually Contributor)
+3. **Federated Credentials**: Two per workspace (plan & apply phases)
+4. **Role Assignment**: Permissions (Contributor by default)
 
 ### How Does Authentication Work?
 
@@ -186,6 +187,14 @@ After applying, check that:
 - ✅ **Specific scope**: Trust is limited to your TFC org/workspace
 - ✅ **Audit trail**: All actions logged in Azure Activity Log
 
+### Why Two Credentials Per Workspace?
+
+Azure federated credentials **do not support wildcards** in the `run_phase` field. Therefore, the bootstrap creates:
+- One credential with `run_phase:plan` for terraform plan operations
+- One credential with `run_phase:apply` for terraform apply operations
+
+This ensures both planning and applying work correctly in Terraform Cloud.
+
 ## Troubleshooting
 
 ### Error: "Failed to obtain OIDC token"
@@ -205,9 +214,10 @@ After applying, check that:
 **Cause**: Subject claim mismatch
 
 **Solution**: 
-1. Check your org and workspace names match exactly
-2. Verify the federated credential in Azure portal
-3. Subject should be: `organization:YOUR_ORG:workspace:YOUR_WORKSPACE:run_phase:*`
+1. Check your org and workspace names match exactly in `terraform.tfvars`
+2. Verify the federated credentials in Azure portal
+3. If workspace is in a project, ensure `tfc_project_name` is set correctly
+4. Subject format: `organization:ORG:project:PROJECT:workspace:WORKSPACE:run_phase:PHASE`
 
 ### Error: "AuthorizationFailed"
 
@@ -220,20 +230,20 @@ After applying, check that:
 
 ## Advanced Configurations
 
-### Use Project-Level Credentials
+### Multiple Workspaces
 
-To use one set of credentials for all workspaces in a project:
+To create credentials for multiple workspaces:
 
-```powershell
-# When running setup script
-Enter workspace name: project:YOUR_PROJECT_NAME
+```hcl
+# In bootstrap/terraform.tfvars
+tfc_workspaces = ["dev", "staging", "prod"]
 ```
 
-Subject claim becomes: `organization:YOUR_ORG:project:YOUR_PROJECT:workspace:*:run_phase:*`
+This creates 6 federated credentials total (2 per workspace).
 
 ### Custom Role Assignments
 
-Edit `bootstrap/terraform-bootstrap/terraform.tfvars`:
+Edit `bootstrap/terraform.tfvars`:
 
 ```hcl
 role_assignments = [
@@ -248,18 +258,16 @@ role_assignments = [
 ]
 ```
 
-### Multiple Environments
+### Wildcard Workspace Credentials
 
-Create separate workspaces for each environment:
+To allow any workspace in your organization:
 
 ```hcl
-# In Terraform Cloud, create:
-# - azure-landing-zone-dev
-# - azure-landing-zone-staging  
-# - azure-landing-zone-prod
-
-# Each workspace can have different variable values
+# In bootstrap/terraform.tfvars
+tfc_workspaces = ["*"]
 ```
+
+Note: This still creates separate plan and apply credentials.
 
 ## Next Steps
 
@@ -275,11 +283,3 @@ Create separate workspaces for each environment:
 - [Azure Workload Identity Federation](https://learn.microsoft.com/en-us/azure/active-directory/develop/workload-identity-federation)
 - [Azure Landing Zones](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/)
 - [Terraform azurerm Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-
-## Support
-
-For issues:
-1. Check Terraform Cloud run logs
-2. Check Azure Activity Log
-3. Review this troubleshooting guide
-4. Open an issue in this repository

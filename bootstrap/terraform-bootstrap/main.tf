@@ -1,3 +1,5 @@
+# TODO: Check if we cannot use the values generated here to be set as an environmentset by terraform (we will need it in all namespaces)
+
 terraform {
   required_version = ">= 1.0"
   required_providers {

@@ -89,7 +89,7 @@ module "aks_mgmt" {
 
 module "federated_credentials" {
   for_each = { for cred in local.federated_credentials : cred.purpose => cred }
-  source   = "github.com/michielvha/federatedcredentials/azurerm"
+  source   = "app.terraform.io/mikevh/federated-credentials/azurerm"
   version  = ">=0.0.1,<1.0.0"
 
   base_resource_name = module.aks_mgmt.cluster_name

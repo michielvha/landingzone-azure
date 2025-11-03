@@ -32,11 +32,10 @@ module "aks_mgmt" {
   # Basic Configuration
   project_name    = "mgmt"
   environment     = "development"
-  cluster_version = "1.28.5"
+  cluster_version = "1.33.3"
 
   # ArgoCD Management Cluster Configuration
   is_mgmt_cluster  = true # This cluster hosts ArgoCD
-  argocd_namespace = "argocd"
 
   # Resource Group (from module)
   resource_group = module.resource_group.resource_group
@@ -56,7 +55,7 @@ module "aks_mgmt" {
     node_count   = 2
     max_pods     = 50
     os_disk_size = 128
-    vm_size      = "Standard_D4s_v3"
+    vm_size      = "Standard_D4as_v5"
     os_disk_type = "Ephemeral"
     name         = "system"
   }
@@ -72,11 +71,6 @@ module "aks_mgmt" {
     admin_username = "azureuser"
     ssh_key        = tls_private_key.key.public_key_openssh
   }
-
-  # Azure AD Admin Groups
-  admin_group_object_ids = [
-    "00000000-0000-0000-0000-000000000000" # Replace with your Azure AD group object ID
-  ]
 
   # Monitoring
   log_analytics_workspace_resource_id = data.azurerm_log_analytics_workspace.law.id

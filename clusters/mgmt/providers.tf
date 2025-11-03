@@ -4,7 +4,7 @@ terraform {
     organization = "mikevh"
 
     workspaces {
-      name = "clusters-mgmt"
+      name = "mgmt"
     }
   }
   required_providers {

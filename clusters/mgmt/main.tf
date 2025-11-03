@@ -78,6 +78,15 @@ module "aks_mgmt" {
   # Use default load balancer for outbound traffic (no user-defined routing)
   use_route_table = false
 
+  # Private Cluster Configuration
+  # Set to true for production environments where API server should not be publicly accessible
+  # Set to false for development/testing where public access is acceptable
+  enable_private_cluster   = false # Public cluster for easier management/development
+  enable_private_dns_zone  = false # Only relevant when enable_private_cluster = true
+  
+  # Optional: Restrict API server access to specific IP ranges (recommended for public clusters)
+  # api_server_authorized_ip_ranges = ["YOUR_IP/32"]
+
   # Admin groups for cluster access (empty for now, add Azure AD group object IDs as needed)
   admin_group_object_ids = []
 

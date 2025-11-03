@@ -105,12 +105,12 @@ locals {
       purpose = "argocd-prd"
       service_accounts = [
         {
-          service_account_name = "argocd-server"
-          namespace            = "argocd"
+          name      = "argocd-server"
+          namespace = "argocd"
         },
         {
-          service_account_name = "argocd-application-controller"
-          namespace            = "argocd"
+          name      = "argocd-application-controller"
+          namespace = "argocd"
         }
       ]
     }

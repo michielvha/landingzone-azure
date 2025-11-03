@@ -60,7 +60,7 @@ provider "azuread" {
 # Get management cluster configuration
 data "azurerm_kubernetes_cluster" "mgmt" {
   name                = "dev-aks-mgmt-we-01"
-  resource_group_name = "dev-mgmt-we-rg"
+  resource_group_name = "mgmt-dev-we-rg"
 }
 
 provider "kubernetes" {

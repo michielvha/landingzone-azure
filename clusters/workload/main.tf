@@ -41,7 +41,7 @@ module "aks_workload" {
   # This is the principal ID of the ArgoCD server's managed identity from the mgmt cluster
   argocd_server_wi = {
     enabled      = true
-    principal_id = "REPLACE_WITH_ARGOCD_PRINCIPAL_ID" # Get this from mgmt cluster federated credentials output
+    principal_id = "22bc545a-d107-4ce4-a3fd-f9125a31d5f9" # Get this from mgmt cluster federated credentials output
   }
 
   # Declarative Onboarding
@@ -119,5 +119,6 @@ output "workload_oidc_issuer_url" {
 }
 
 output "workload_api_server_url" {
-  value = module.aks_workload.aks_cluster_api_server_url
+  value     = module.aks_workload.aks_cluster_api_server_url
+  sensitive = true
 }

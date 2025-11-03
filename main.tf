@@ -23,6 +23,17 @@ module "networking" {
       address_prefixes  = ["10.224.0.0/16"]
       service_endpoints = ["Microsoft.Storage", "Microsoft.ContainerRegistry", "Microsoft.KeyVault"]
 
+      # Route table for User Defined Routing (required for AKS with outboundType = userDefinedRouting)
+      route_table_routes = {
+        # Default route to Internet via Azure Firewall or NAT Gateway
+        # Update next_hop_in_ip_address to your firewall IP if using Azure Firewall
+        default_route = {
+          address_prefix         = "0.0.0.0/0"
+          next_hop_type          = "Internet"  # Change to "VirtualAppliance" if using firewall
+          # next_hop_in_ip_address = "10.224.1.4"  # Uncomment and set if using firewall
+        }
+      }
+
       nsg_rules = {
         # Allow SSH for node management (restrict source as needed)
         allow_ssh = {

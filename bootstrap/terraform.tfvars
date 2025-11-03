@@ -11,10 +11,16 @@ tfc_project_name = "Default Project" # ⚠️ IMPORTANT! Include this if workspa
 # Azure AD Application Name (optional)
 # app_name = "terraform-cloud-mikevh"
 
-# Role Assignments (optional - defaults to Contributor on subscription)
-# role_assignments = [
-#   {
-#     role  = "Contributor"
-#     scope = null  # Uses subscription scope
-#   }
-# ]
+# Role Assignments - Need both Contributor and User Access Administrator
+# Contributor: Create/modify resources
+# User Access Administrator: Create role assignments (required for AKS UMI permissions)
+role_assignments = [
+  {
+    role  = "Contributor"
+    scope = null  # Uses subscription scope
+  },
+  {
+    role  = "User Access Administrator"
+    scope = null  # Uses subscription scope
+  }
+]

@@ -1,5 +1,5 @@
-# Management Cluster Example
-# This cluster hosts ArgoCD and manages other target clusters
+# Workload/Target Cluster Example
+# This cluster is managed by ArgoCD running in the management cluster
 
 # Data sources for existing resources
 data "azurerm_log_analytics_workspace" "law" {
@@ -19,35 +19,46 @@ module "resource_group" {
 
   location    = "westeurope"
   environment = "development"
-  project     = "mgmt"
+  project     = "workload"
   contact     = "platform-team@example.com"
   repo_name   = "platform"
-  repo_path   = "terraform/development/mgmt"
+  repo_path   = "terraform/development/workload"
 }
 
-# Management AKS Cluster with ArgoCD
-module "aks_mgmt" {
+# Workload AKS Cluster managed by ArgoCD
+module "aks_workload" {
   source = "app.terraform.io/mikevh/aks/azurerm"
 
   # Basic Configuration
-  project_name    = "mgmt"
+  project_name    = "workload"
   environment     = "development"
   cluster_version = "1.33.3"
 
-  # ArgoCD Management Cluster Configuration
-  is_mgmt_cluster  = true # This cluster hosts ArgoCD
+  # Target Cluster Configuration (managed by ArgoCD)
+  is_mgmt_cluster  = false # This cluster is managed by ArgoCD
+
+  # ArgoCD Workload Identity Configuration
+  # This is the principal ID of the ArgoCD server's managed identity from the mgmt cluster
+  argocd_server_wi = {
+    enabled      = true
+    principal_id = "REPLACE_WITH_ARGOCD_PRINCIPAL_ID" # Get this from mgmt cluster federated credentials output
+  }
+
+  # Declarative Onboarding
+  # Set to false for automatic cluster secret creation in the mgmt cluster
+  declarative_onboarding = false
 
   # Resource Group (from module)
   resource_group = module.resource_group.resource_group
 
-  # Networking Configuration
+  # Networking Configuration - aligned with mgmt cluster
   networking = {
     subnet_name          = "lz-production-kubernetes-subnet"
     resource_group_name  = "landingzone-prd-we-rg"
     virtual_network_name = "lz-production-vnet"
     network_plugin       = "azure"
-    service_cidr         = "192.168.0.0/24"
-    dns_service_ip       = "192.168.0.10"
+    service_cidr         = "192.168.1.0/24"  # Different from mgmt (192.168.0.0/24)
+    dns_service_ip       = "192.168.1.10"
   }
 
   # Default Node Pool
@@ -87,59 +98,26 @@ module "aks_mgmt" {
   # Optional: Restrict API server access to specific IP ranges (recommended for public clusters)
   # api_server_authorized_ip_ranges = ["YOUR_IP/32"]
 
-  # Admin groups for cluster access (empty for now, add Azure AD group object IDs as needed)
-  admin_group_object_ids = []
-
   # Tags
   custom_tags = {
-    purpose = "argocd-management"
+    managed-by  = "argocd"
+    application = "workload"
   }
 }
 
-module "federated_credentials" {
-  for_each = { for cred in local.federated_credentials : cred.purpose => cred }
-  source   = "app.terraform.io/mikevh/federated-credentials/azurerm"
-  version  = ">=0.0.1,<1.0.0"
-
-  base_resource_name = module.aks_mgmt.cluster_name
-  oidc_issuer_url    = module.aks_mgmt.oidc_issuer_url
-  purpose            = each.value.purpose
-  resource_group     = module.resource_group.resource_group
-  service_accounts   = each.value.service_accounts
-}
-
-locals {
-  federated_credentials = [
-    {
-      purpose = "argocd-prd"
-      service_accounts = [
-        {
-          name      = "argocd-server"
-          namespace = "argocd"
-        },
-        {
-          name      = "argocd-application-controller"
-          namespace = "argocd"
-        }
-      ]
-    }
-  ]
-}
-
 # Outputs
-output "mgmt_cluster_name" {
-  value = module.aks_mgmt.cluster_name
+output "workload_cluster_name" {
+  value = module.aks_workload.cluster_name
 }
 
-output "mgmt_cluster_id" {
-  value = module.aks_mgmt.id
+output "workload_cluster_id" {
+  value = module.aks_workload.id
 }
 
-output "mgmt_oidc_issuer_url" {
-  value = module.aks_mgmt.oidc_issuer_url
+output "workload_oidc_issuer_url" {
+  value = module.aks_workload.oidc_issuer_url
 }
 
-output "argocd_principal_id" {
-  description = "Principal ID of the ArgoCD workload identity for use in workload clusters"
-  value       = module.federated_credentials["argocd-prd"].object_id
+output "workload_api_server_url" {
+  value = module.aks_workload.aks_cluster_api_server_url
 }

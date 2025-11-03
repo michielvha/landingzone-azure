@@ -54,7 +54,7 @@ module "aks_mgmt" {
   default_node_pool = {
     node_count   = 2
     max_pods     = 50
-    os_disk_size = 128
+    os_disk_size = 30
     vm_size      = "Standard_D2s_v3"
     os_disk_type = "Ephemeral"
     name         = "system"

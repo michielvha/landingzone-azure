@@ -3,7 +3,7 @@ tfc_organization = "mikevh"
 
 # List of workspaces to create credentials for
 # Each workspace will get 2 credentials (one for plan, one for apply)
-tfc_workspaces = ["landingzone-azure"]
+tfc_workspaces = ["landingzone-azure", "cluster-mgmt"]
 
 # Optional: Use project-level credentials
 tfc_project_name = "Default Project" # ⚠️ IMPORTANT! Include this if workspace is in a project!

@@ -55,7 +55,7 @@ module "aks_mgmt" {
     node_count   = 2
     max_pods     = 50
     os_disk_size = 128
-    vm_size      = "Standard_D4as_v5"
+    vm_size      = "Standard_D2s_v3"
     os_disk_type = "Ephemeral"
     name         = "system"
   }
@@ -63,7 +63,7 @@ module "aks_mgmt" {
   # Auto-scaling for default node pool
   auto_scaler = {
     min_count = 2
-    max_count = 5
+    max_count = 3
   }
 
   # Linux Profile for SSH access

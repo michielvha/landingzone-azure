@@ -75,10 +75,46 @@ module "aks_mgmt" {
   # Monitoring
   log_analytics_workspace_resource_id = data.azurerm_log_analytics_workspace.law.id
 
+  # Use default load balancer for outbound traffic (no user-defined routing)
+  use_route_table = false
+
+  # Admin groups for cluster access (empty for now, add Azure AD group object IDs as needed)
+  admin_group_object_ids = []
+
   # Tags
   custom_tags = {
     purpose = "argocd-management"
   }
+}
+
+module "federated_credentials" {
+  for_each = { for cred in local.federated_credentials : cred.purpose => cred }
+  source   = "github.com/michielvha/federatedcredentials/azurerm"
+  version  = ">=0.0.1,<1.0.0"
+
+  base_resource_name = module.aks_mgmt.cluster_name
+  oidc_issuer_url    = module.aks_mgmt.oidc_issuer_url
+  purpose            = each.value.purpose
+  resource_group     = module.resource_group.resource_group
+  service_accounts   = each.value.service_accounts
+}
+
+locals {
+  federated_credentials = [
+    {
+      purpose = "argocd-prd"
+      service_accounts = [
+        {
+          service_account_name = "argocd-server"
+          namespace            = "argocd"
+        },
+        {
+          service_account_name = "argocd-application-controller"
+          namespace            = "argocd"
+        }
+      ]
+    }
+  ]
 }
 
 # Outputs

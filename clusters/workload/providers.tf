@@ -66,5 +66,6 @@ data "azurerm_kubernetes_cluster" "mgmt" {
 provider "kubernetes" {
   host                   = data.azurerm_kubernetes_cluster.mgmt.kube_config.0.host
   cluster_ca_certificate = base64decode(data.azurerm_kubernetes_cluster.mgmt.kube_config.0.cluster_ca_certificate)
-  token                  = data.azurerm_kubernetes_cluster.mgmt.kube_config.0.token
+  client_certificate     = base64decode(data.azurerm_kubernetes_cluster.mgmt.kube_config.0.client_certificate)
+  client_key             = base64decode(data.azurerm_kubernetes_cluster.mgmt.kube_config.0.client_key)
 }
